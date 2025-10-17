@@ -1,27 +1,12 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
-
 const router = express.Router();
 const Booking = require('../models/Bookings');
-
-// Middleware to verify JWT
-const verifyToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'No token provided' });
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.userId;
-    req.userRole = decoded.role; // For admin detection
-    next();
-  } catch (error) {
-    res.status(403).json({ error: 'Invalid token' });
-  }
-};
+const { verifyToken, verifyAdmin } = require('../middleware/auth');
 
 // Create booking (user)
 router.post('/', verifyToken, async (req, res) => {
   try {
-    const bookingData = { ...req.body, userId: req.userId };
+    const bookingData = { ...req.body, userId: req.userId, bookingDate: new Date().toISOString().split('T')[0] };
     const booking = new Booking(bookingData);
     await booking.save();
     res.status(201).json({ message: 'Booking submitted', booking });
@@ -35,7 +20,6 @@ router.get('/', verifyToken, async (req, res) => {
   try {
     let filter = {};
     
-    // If not admin, only show user's own bookings
     if (req.userRole !== 'admin') {
       filter = { userId: req.userId };
     }
@@ -48,15 +32,17 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 // Update booking (admin approve/reject)
-router.put('/:id', verifyToken, async (req, res) => {
+router.put('/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+    
     if (updates.status === 'confirmed') {
       updates.ticketNumber = `TKT-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
     } else if (updates.status === 'rejected') {
       updates.ticketNumber = null;
     }
+    
     const booking = await Booking.findByIdAndUpdate(id, updates, { new: true }).populate('userId', 'name email');
     res.json(booking);
   } catch (error) {
@@ -65,7 +51,7 @@ router.put('/:id', verifyToken, async (req, res) => {
 });
 
 // Delete booking
-router.delete('/:id', verifyToken, async (req, res) => {
+router.delete('/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
     await Booking.findByIdAndDelete(req.params.id);
     res.json({ message: 'Booking deleted' });

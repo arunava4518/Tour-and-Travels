@@ -2,7 +2,6 @@ const API_BASE = 'http://localhost:5000/api';
 
 const apiRequest = async (endpoint, options = {}) => {
   const token = localStorage.getItem('token');
-  
   const config = {
     method: options.method || 'GET',
     headers: {
@@ -19,7 +18,8 @@ const apiRequest = async (endpoint, options = {}) => {
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, config);
     
-    if (response.status === 401) {
+    // Don't treat login endpoint 401s as session expired
+    if (response.status === 401 && !endpoint.includes('/login')) {
       localStorage.removeItem('token');
       localStorage.removeItem('currentUser');
       window.location.href = '/';
@@ -48,7 +48,7 @@ export const authAPI = {
     method: 'POST', 
     body: userData 
   }),
-  adminLogin: (credentials) => apiRequest('/admin/login', { 
+  adminLogin: (credentials) => apiRequest('/auth/admin/login', { 
     method: 'POST', 
     body: credentials 
   }),

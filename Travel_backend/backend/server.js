@@ -1,17 +1,16 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken'); // ADDED: jwt import
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
+
+console.log('ADMIN_EMAIL:', process.env.ADMIN_EMAIL ? 'Loaded' : 'Missing');
+console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Loaded' : 'Missing');
 
 const app = express();
 
 // Middleware
-// In server.js - replace the current CORS line
-app.use(cors({
-  origin: 'http://localhost:5173', // Your Vite frontend URL
-  credentials: true
-}));
+app.use(cors());
 app.use(express.json());
 
 console.log('✅ Backend Server Starting...');
@@ -19,8 +18,9 @@ console.log('✅ Backend Server Starting...');
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI;
 mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 30000,
+  socketTimeoutMS: 45000,
+  bufferCommands: false,
 })
 .then(() => {
   console.log('✅ MongoDB Connected Successfully');
@@ -45,28 +45,14 @@ mongoose.connection.on('disconnected', () => {
 // Import routes
 const authRoutes = require('./routes/auth');
 const usersRoutes = require('./routes/User');
-const bookingsRoutes = require('./routes/Bookings'); // ADDED: bookings routes import
+const bookingsRoutes = require('./routes/Bookings');
 
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/bookings', bookingsRoutes);
 
-// Admin login (single route - fixed)
-app.post('/api/admin/login', (req, res) => {
-  const { email, password } = req.body;
-  if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
-    const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '7d' }); // FIXED: use jwt instead of require
-    return res.json({ 
-      message: 'Admin login successful', 
-      token,
-      user: { email: email, role: 'admin' }
-    });
-  }
-  res.status(401).json({ error: 'Invalid admin credentials' });
-});
-
-// Test routes (keep existing)
+// Test routes
 app.get('/', (req, res) => {
   const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Not connected';
   
@@ -74,7 +60,7 @@ app.get('/', (req, res) => {
     message: 'DreamTrips BACKEND Server is running!',
     status: 'OK',
     database: dbStatus,
-    databaseState: mongoose.connection.readyState // 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
+    databaseState: mongoose.connection.readyState
   });
 });
 
@@ -99,18 +85,7 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
-app.get('/api', (req, res) => {
-  res.json({ 
-    message: 'DreamTrips API is running!',
-    endpoints: {
-      auth: '/api/auth',
-      users: '/api/users', 
-      bookings: '/api/bookings',
-      admin: '/api/admin'
-    },
-    status: 'OK'
-  });
-});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
@@ -122,9 +97,8 @@ app.listen(PORT, () => {
   console.log(`🌐 Test: http://localhost:${PORT}`);
   console.log(`🔗 API Test: http://localhost:${PORT}/api/test`);
   console.log(`❤️ Health Check: http://localhost:${PORT}/api/health`);
-  console.log(`📊 MongoDB URI: ${MONGODB_URI}`);
   console.log(`🔐 Auth: POST /api/auth/login or /api/auth/register`);
   console.log(`👥 Users: GET /api/users (with token)`);
   console.log(`📝 Bookings: POST/GET /api/bookings (with token)`);
-  console.log(`🛡️ Admin: POST /api/admin/login`);
+  console.log(`🛡️ Admin: POST /api/auth/admin/login`);
 });

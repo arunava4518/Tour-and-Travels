@@ -13,8 +13,6 @@ const ongoingEvents = [
   { id: 4, title: "Kerala Backwater Festival", date: "Coming Soon", price: "Coming Soon", badge: "CULTURAL", image: "https://images.pexels.com/photos/962464/pexels-photo-962464.jpeg?auto=compress&cs=tinysrgb&w=800", description: "Cruise Kerala's backwaters." },
 ];
 
-// Removed unused placesData variable that was causing ESLint error
-
 const BackButton = ({ to = "/", text = "Back to Home" }) => <Link to={to} className="btn back-btn">⬅ {text}</Link>;
 
 const EventCard = ({ event, user }) => {
@@ -87,6 +85,11 @@ const BookingPage = ({ user }) => {
     const validMembers = members.filter(m => m.name && m.age && m.gender);
     if (validMembers.length === 0) {
       alert('Please add at least one member');
+      return;
+    }
+
+    if (!formData.travelDate) {
+      alert('Please select a travel date');
       return;
     }
 
@@ -560,7 +563,6 @@ const AuthModal = ({ show, onClose, onLogin, onRegister }) => {
         }
         await onRegister(formData);
         alert('Account created successfully! Please login.');
-        // Switch to login form after successful registration
         setIsSignup(false);
         setFormData({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
       } else {
@@ -649,49 +651,55 @@ export default function App() {
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('currentUser') || 'null'));
 
   const handleAuth = async (authData, type) => {
-  try {
-    console.log('Auth attempt:', type, authData.email); // Debug log
-    
-    if (type === 'login') {
-      // Check if admin login
-      if (authData.email === ADMIN_CREDENTIALS.email && authData.password === ADMIN_CREDENTIALS.password) {
-        const response = await authAPI.adminLogin(authData);
+    try {
+      console.log('Auth attempt:', type, authData.email);
+      
+      if (type === 'login') {
+        // Check if admin login
+        if (authData.email === ADMIN_CREDENTIALS.email && authData.password === ADMIN_CREDENTIALS.password) {
+          try {
+            const response = await authAPI.adminLogin(authData);
+            localStorage.setItem('token', response.token);
+            localStorage.setItem('isAdmin', 'true');
+            localStorage.setItem('adminEmail', authData.email);
+            window.location.href = '/admin';
+            return;
+          } catch (adminError) {
+            console.error('Admin login failed:', adminError);
+            alert('Admin login failed: ' + adminError.message);
+            return;
+          }
+        }
+        
+        // Regular user login
+        const response = await authAPI.login(authData);
+        setUser(response.user);
         localStorage.setItem('token', response.token);
-        localStorage.setItem('isAdmin', 'true');
-        localStorage.setItem('adminEmail', authData.email);
-        window.location.href = '/admin';
-        return;
+        localStorage.setItem('currentUser', JSON.stringify(response.user));
+        setShowAuth(false);
+        alert('Login successful!');
+      } else if (type === 'register') {
+        // Registration
+        const registrationData = { 
+          name: authData.name, 
+          email: authData.email, 
+          password: authData.password 
+        };
+        
+        if (authData.phone && authData.phone.trim() !== '') {
+          registrationData.phone = authData.phone;
+        }
+        
+        await authAPI.register(registrationData);
+        alert('Account created successfully! Please login with your credentials.');
       }
-      
-      // Regular user login
-      const response = await authAPI.login(authData);
-      setUser(response.user);
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('currentUser', JSON.stringify(response.user));
-      setShowAuth(false);
-      alert('Login successful!');
-    } else if (type === 'register') {
-      // Registration - remove phone if empty
-      const registrationData = { 
-        name: authData.name, 
-        email: authData.email, 
-        password: authData.password 
-      };
-      
-      // Only include phone if provided
-      if (authData.phone && authData.phone.trim() !== '') {
-        registrationData.phone = authData.phone;
-      }
-      
-      await authAPI.register(registrationData);
-      alert('Account created successfully! Please login with your credentials.');
-      // Don't close modal - let user switch to login
+    } catch (error) {
+      console.error('Auth error:', error);
+      const errorMessage = error.message || 'Authentication failed. Please try again.';
+      alert(errorMessage);
     }
-  } catch (error) {
-    console.error('Auth error:', error);
-    alert('Authentication failed: ' + (error.message || 'Please check your information and try again.'));
-  }
-};
+  };
+
   return (
     <Router>
       <Routes>
